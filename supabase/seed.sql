@@ -1,0 +1,11 @@
+-- VisionTech Seed Data
+-- Run in Supabase SQL Editor after running all migrations
+
+INSERT INTO products (name, slug, description, category, brand, price, compare_price, stock, images, specs, is_featured, is_active)
+VALUES
+  ('iPhone 16 Pro Max', 'iphone-16-pro-max', 'The iPhone 16 Pro Max sets a new standard. A18 Pro chip, titanium design, 48MP camera.', 'Phones', 'Apple', 199999, 220000, 12, '{}', '{"Display":"6.9\" Super Retina XDR 120Hz","Processor":"A18 Pro","RAM":"8GB","Storage":"256GB","Camera":"48MP Triple","Battery":"4685 mAh","OS":"iOS 18"}', true, true),
+  ('Samsung Galaxy S25 Ultra', 'samsung-galaxy-s25-ultra', 'Samsung flagship with S Pen, 200MP camera, and AI Galaxy features.', 'Phones', 'Samsung', 179999, 195000, 8, '{}', '{"Display":"6.9\" Dynamic AMOLED 120Hz","Processor":"Snapdragon 8 Elite","RAM":"12GB","Storage":"512GB","Camera":"200MP Quad","Battery":"5000 mAh","OS":"Android 15"}', true, true),
+  ('MacBook Pro 14\" M4', 'macbook-pro-14-m4', 'M4 chip powerhouse with Liquid Retina XDR display. Built for professionals.', 'Laptops', 'Apple', 249999, 275000, 5, '{}', '{"Processor":"Apple M4","RAM":"16GB","Storage":"512GB SSD","Display":"14.2\" Liquid Retina XDR","Battery":"24hrs","OS":"macOS Sequoia"}', true, true),
+  ('Dell XPS 15', 'dell-xps-15', 'Premium Windows laptop with OLED display and Intel Core Ultra.', 'Laptops', 'Dell', 189999, NULL, 3, '{}', '{"Processor":"Intel Core Ultra 7","RAM":"16GB","Storage":"1TB SSD","Display":"15.6\" OLED","Battery":"13hrs","OS":"Windows 11"}', false, true),
+  ('AirPods Pro 2nd Gen', 'airpods-pro-2', 'ANC with adaptive audio, personalized spatial audio, and USB-C charging case.', 'Accessories', 'Apple', 34999, 39999, 20, '{}', '{"Battery":"6hrs (30hrs with case)","Noise Cancellation":"Active Adaptive","Chip":"H2","Connectivity":"Bluetooth 5.3","Charging":"USB-C / MagSafe"}', false, true),
+  ('Pixel 9 Pro', 'pixel-9-pro', 'Google flagship with Magic Eraser, Tensor G4, and 7 years of AI-powered updates.', 'Phones', 'Google', 139999, NULL, 7, '{}', '{"Display":"6.3\" LTPO OLED 120Hz","Processor":"Google Tensor G4","RAM":"16GB","Storage":"256GB","Camera":"50MP Triple","Battery":"4700 mAh","OS":"Android 15"}', false, true);
