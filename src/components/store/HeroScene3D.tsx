@@ -82,7 +82,7 @@ export default function HeroScene3D() {
     scene.add(bgMesh);
 
     // ── Star field ───────────────────────────────────────────────────────
-    const STAR_COUNT = 1800;
+    const STAR_COUNT = 200;
     const starPos = new Float32Array(STAR_COUNT * 3);
     const starSizes = new Float32Array(STAR_COUNT);
     const starBright = new Float32Array(STAR_COUNT);
