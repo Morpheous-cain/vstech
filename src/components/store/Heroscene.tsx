@@ -37,6 +37,7 @@ export default function HeroScene() {
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xffffff);
+    scene.fog = new THREE.Fog(0xffffff, 8, 22);
 
     const camera = new THREE.PerspectiveCamera(
       45,
@@ -424,31 +425,7 @@ export default function HeroScene() {
     addShape(new THREE.TetrahedronGeometry(0.253),  crystalMat2, [ 3.5,  2.8,  0.5]);
 
     // ---- Particle field — indigo/periwinkle --------------------------------
-    const PARTICLE_COUNT = 300;
-    const pPos    = new Float32Array(PARTICLE_COUNT * 3);
-    const pColors = new Float32Array(PARTICLE_COUNT * 3);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const i3 = i * 3;
-      pPos[i3]     = (Math.random() - 0.5) * 22;
-      pPos[i3 + 1] = (Math.random() - 0.5) * 14;
-      pPos[i3 + 2] = (Math.random() - 0.5) * 10 - 3;
-      // Mix between indigo and periwinkle
-      const t = Math.random();
-      pColors[i3]     = 0.39 + t * 0.12;   // r: 0.39-0.51
-      pColors[i3 + 1] = 0.40 + t * 0.31;   // g: 0.40-0.71
-      pColors[i3 + 2] = 0.95 + t * 0.05;   // b: 0.95-1.0
-    }
-    const partGeo = new THREE.BufferGeometry();
-    partGeo.setAttribute("position", new THREE.BufferAttribute(pPos,    3));
-    partGeo.setAttribute("color",    new THREE.BufferAttribute(pColors, 3));
-    const particles = new THREE.Points(partGeo, new THREE.PointsMaterial({
-      size: 0.04, vertexColors: true,
-      transparent: true, opacity: 0.55,
-      sizeAttenuation: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }));
-    scene.add(particles);
+
 
     // ---- Mouse + resize ----------------------------------------------------
     let mouseX = 0, mouseY = 0, targetX = 0, targetY = 0;
@@ -520,8 +497,7 @@ export default function HeroScene() {
       // Pulse indigo fill
       indigoFill.intensity = 10 + Math.sin(clock * 1.6) * 3;
 
-      particles.rotation.y = clock * 0.018;
-      particles.rotation.x = Math.sin(clock * 0.12) * 0.05;
+
 
       screenBounce.intensity = 4.0 + Math.sin(clock * 1.4) * 0.8;
 

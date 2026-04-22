@@ -26,6 +26,7 @@ export default function HeroScene3D() {
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x020408);
+    scene.fog = new THREE.Fog(0x020408, 10, 30);
 
     const camera = new THREE.PerspectiveCamera(45, canvas.offsetWidth / canvas.offsetHeight, 0.1, 300);
     camera.position.set(0, 0, 11);
@@ -129,29 +130,6 @@ export default function HeroScene3D() {
     const stars = new THREE.Points(starGeo, starMat);
     scene.add(stars);
 
-    // ── Cosmic dust particles ─────────────────────────────────────────────
-    const DUST_COUNT = 350;
-    const dustPos = new Float32Array(DUST_COUNT * 3);
-    const dustColors = new Float32Array(DUST_COUNT * 3);
-    for (let i = 0; i < DUST_COUNT; i++) {
-      dustPos[i*3]   = (Math.random()-0.5)*30;
-      dustPos[i*3+1] = (Math.random()-0.5)*18;
-      dustPos[i*3+2] = (Math.random()-0.5)*8 - 2;
-      // indigo / violet dust
-      const t = Math.random();
-      dustColors[i*3]   = 0.3 + t * 0.2;
-      dustColors[i*3+1] = 0.3 + t * 0.1;
-      dustColors[i*3+2] = 0.8 + t * 0.2;
-    }
-    const dustGeo = new THREE.BufferGeometry();
-    dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
-    dustGeo.setAttribute("color", new THREE.BufferAttribute(dustColors, 3));
-    const dustMat = new THREE.PointsMaterial({
-      size: 0.055, vertexColors: true, transparent: true,
-      opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-    });
-    const dust = new THREE.Points(dustGeo, dustMat);
-    scene.add(dust);
 
     // ── Lighting ──────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0x111133, 1.2));
@@ -505,8 +483,7 @@ export default function HeroScene3D() {
 
       // Stars drift
       stars.rotation.y = clock * 0.006;
-      dust.rotation.y = clock * 0.014;
-      dust.rotation.x = Math.sin(clock * 0.1) * 0.03;
+
 
       renderer.render(scene, camera);
     };
@@ -519,8 +496,8 @@ export default function HeroScene3D() {
       window.removeEventListener("resize", onResize);
       // Dispose
       renderer.dispose();
-      [bgGeo, starGeo, dustGeo].forEach(g => g.dispose());
-      [bgMat, starMat, dustMat, bodyMat, backMat, frameMat, bezelMat, screenMat].forEach(m => m.dispose());
+      [bgGeo, starGeo,].forEach(g => g.dispose());
+      [bgMat, starMat, bodyMat, backMat, frameMat, bezelMat, screenMat].forEach(m => m.dispose());
     };
   }, []);
 
