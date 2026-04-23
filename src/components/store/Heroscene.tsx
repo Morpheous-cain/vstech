@@ -1,27 +1,25 @@
 "use client";
-
 /**
- * HeroScene — VisionTech 3D hero.
- * White + Indigo theme redesign.
- * Improvements:
- *  1. Pure white background with soft indigo radial gradient.
- *  2. Phone has deep indigo frame (matching brand palette).
- *  3. Screen shows indigo UI elements on white background.
- *  4. Floating crystal accents in indigo/violet tones.
- *  5. Soft particle field in indigo/periwinkle.
- *  6. Premium lighting for white environment — no harsh shadows.
+ * HeroScene3D — VisionTech 3D hero.
+ *
+ * Phone      : /phone.glb loaded via GLTFLoader (no Draco needed — pure PBR)
+ * Interaction: click-drag left/right to spin; release → auto-rotate resumes smoothly
+ *              mouse hover applies subtle parallax to camera (background depth)
+ * Background : pure deep-space gradient + 1 800-point white star field
+ * Accents    : 9 floating geometric shapes (octahedron / icosahedron / tetrahedron)
  */
-
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-export default function HeroScene() {
+export default function HeroScene3D() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // ── Renderer ──────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -30,487 +28,389 @@ export default function HeroScene() {
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.3;
+    renderer.shadowMap.enabled = false;
 
+    // ── Scene & camera ────────────────────────────────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff);
-    scene.fog = new THREE.Fog(0xffffff, 8, 22);
+    scene.background = new THREE.Color(0x000008);
 
     const camera = new THREE.PerspectiveCamera(
       45,
       canvas.offsetWidth / canvas.offsetHeight,
       0.1,
-      200
+      300,
     );
-    camera.position.set(4, 1.5, 9);
-    camera.lookAt(1.5, 0, 0);
+    camera.position.set(0, 0, 11);
 
-    // ── Background: white with soft indigo radial glow ─────────────────────
-    const bgGeo = new THREE.PlaneGeometry(60, 40);
+    // ── Background gradient plane ─────────────────────────────────────────
+    const bgGeo = new THREE.PlaneGeometry(80, 50);
     const bgMat = new THREE.ShaderMaterial({
       depthWrite: false,
-      side: THREE.FrontSide,
       uniforms: {
-        uColorCenter: { value: new THREE.Color(0xeef2ff) }, // indigo-50
-        uColorMid:    { value: new THREE.Color(0xf8f9fc) }, // near white
-        uColorEdge:   { value: new THREE.Color(0xffffff) }, // pure white edge
+        uTop: { value: new THREE.Color(0x000105) },
+        uMid: { value: new THREE.Color(0x00030e) },
+        uBot: { value: new THREE.Color(0x000008) },
       },
-      vertexShader: /* glsl */`
+      vertexShader: `
         varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
       `,
-      fragmentShader: /* glsl */`
-        uniform vec3 uColorCenter;
-        uniform vec3 uColorMid;
-        uniform vec3 uColorEdge;
+      fragmentShader: `
+        uniform vec3 uTop, uMid, uBot;
         varying vec2 vUv;
-        void main() {
-          vec2 centre = vec2(0.65, 0.52);
-          float dist = length(vUv - centre) * 1.6;
-          dist = clamp(dist, 0.0, 1.0);
-          float t = smoothstep(0.0, 1.0, dist);
-          float t2 = smoothstep(0.0, 0.5, dist);
-          vec3 col = mix(uColorCenter, uColorMid, t2);
-          col = mix(col, uColorEdge, t * 0.6);
+        void main(){
+          float t = vUv.y;
+          vec3 col = mix(uBot, uMid, smoothstep(0.0, 0.5, t));
+          col = mix(col, uTop, smoothstep(0.5, 1.0, t));
           gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
-    const bgPlane = new THREE.Mesh(bgGeo, bgMat);
-    bgPlane.position.set(1.5, 0, -8);
-    bgPlane.renderOrder = -1;
-    scene.add(bgPlane);
+    const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+    bgMesh.position.z = -14;
+    bgMesh.renderOrder = -2;
+    scene.add(bgMesh);
 
-    // Soft ambient for white environment
-    scene.add(new THREE.AmbientLight(0xffffff, 1.8));
+    // ── Star field ────────────────────────────────────────────────────────
+    const STAR_COUNT = 1800;
+    const starPos    = new Float32Array(STAR_COUNT * 3);
+    const starSizes  = new Float32Array(STAR_COUNT);
+    const starBright = new Float32Array(STAR_COUNT);
+    for (let i = 0; i < STAR_COUNT; i++) {
+      starPos[i * 3]     = (Math.random() - 0.5) * 120;
+      starPos[i * 3 + 1] = (Math.random() - 0.5) * 80;
+      starPos[i * 3 + 2] = (Math.random() - 0.5) * 40 - 12;
+      starSizes[i]  = Math.random() < 0.92 ? 0.3 + Math.random() * 0.7 : 1.0 + Math.random() * 1.2;
+      starBright[i] = Math.random();
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position",   new THREE.BufferAttribute(starPos,    3));
+    starGeo.setAttribute("size",       new THREE.BufferAttribute(starSizes,  1));
+    starGeo.setAttribute("brightness", new THREE.BufferAttribute(starBright, 1));
+    const starMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: `
+        attribute float size;
+        attribute float brightness;
+        varying float vBright;
+        uniform float uTime;
+        void main(){
+          vBright = brightness;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (280.0 / -mv.z);
+          gl_Position  = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        varying float vBright;
+        uniform float uTime;
+        void main(){
+          float d = length(gl_PointCoord - 0.5);
+          if(d > 0.5) discard;
+          float twinkle = 0.85 + 0.15 * sin(uTime * 1.4 + vBright * 31.4);
+          float alpha   = (1.0 - d * 2.0) * twinkle;
+          gl_FragColor  = vec4(1.0, 1.0, 1.0, alpha * 0.92);
+        }
+      `,
+    });
+    const stars = new THREE.Points(starGeo, starMat);
+    scene.add(stars);
 
-    // Key light — cool white from upper right
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
-    keyLight.position.set(6, 8, 6);
+    // ── Lighting ──────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0x8899cc, 1.8));
+
+    const keyLight = new THREE.DirectionalLight(0xdde8ff, 5.0);
+    keyLight.position.set(-4, 6, 9);
     scene.add(keyLight);
 
-    // Indigo fill — left side, gives phone its cool shadow
-    const indigoFill = new THREE.PointLight(0x6366f1, 12, 18);
-    indigoFill.position.set(-4, 1, 5);
-    scene.add(indigoFill);
-
-    // Rim light — bright white from behind
-    const rimLight = new THREE.DirectionalLight(0xffffff, 1.8);
-    rimLight.position.set(-3, 3, -5);
+    const rimLight = new THREE.DirectionalLight(0x9060ff, 3.0);
+    rimLight.position.set(6, 2, -6);
     scene.add(rimLight);
 
-    // Violet accent from below
-    const violetAccent = new THREE.PointLight(0x818cf8, 6, 12);
-    violetAccent.position.set(2, -4, 4);
-    scene.add(violetAccent);
+    const screenLight = new THREE.PointLight(0xaaccff, 10, 14);
+    screenLight.position.set(0, 0, 7);
+    scene.add(screenLight);
 
-    // Screen bounce
-    const screenBounce = new THREE.PointLight(0xc7d2fe, 5, 8);
-    screenBounce.position.set(2.6, 0, 4);
-    scene.add(screenBounce);
+    const fillLight = new THREE.PointLight(0x4444cc, 4, 16);
+    fillLight.position.set(0, -6, 2);
+    scene.add(fillLight);
 
-    // ---- Phone model -------------------------------------------------------
-    const phoneGroup = new THREE.Group();
+    const topLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    topLight.position.set(0, 10, 4);
+    scene.add(topLight);
 
-    const PHONE_W = 2.0;
-    const PHONE_H = 4.1;
-    const PHONE_D = 0.16;
-    const FRAME_T = 0.032;
-
-    // Body — deep indigo
-    phoneGroup.add(new THREE.Mesh(
-      new THREE.BoxGeometry(PHONE_W, PHONE_H, PHONE_D, 2, 4, 1),
-      new THREE.MeshStandardMaterial({
-        color: 0x1a1c5e, metalness: 0.3, roughness: 0.05, envMapIntensity: 2.0,
-      })
-    ));
-
-    // Back glass — indigo with shimmer
-    const backGlass = new THREE.Mesh(
-      new THREE.BoxGeometry(PHONE_W - 0.07, PHONE_H - 0.07, 0.007),
-      new THREE.MeshStandardMaterial({
-        color: 0x2d30a0, metalness: 0.15, roughness: 0.02,
-        transparent: true, opacity: 0.95, envMapIntensity: 3.0,
-      })
-    );
-    backGlass.position.z = -(PHONE_D / 2) - 0.001;
-    phoneGroup.add(backGlass);
-
-    // Frame — polished indigo-violet sides
-    const frameMat = new THREE.MeshStandardMaterial({
-      color: 0x4f52e8, metalness: 0.99, roughness: 0.03, envMapIntensity: 4.0,
+    // ── Geometric accent shapes ───────────────────────────────────────────
+    const matIndigo = new THREE.MeshStandardMaterial({
+      color: 0x2233cc, metalness: 0.9, roughness: 0.08,
+      emissive: 0x3344ff, emissiveIntensity: 0.55,
+      transparent: true, opacity: 0.82,
     });
-    const frameSides: [number, number, number, number, number, number][] = [
-      [PHONE_W + FRAME_T, FRAME_T, PHONE_D + FRAME_T,  0,                        PHONE_H / 2 + FRAME_T / 2, 0],
-      [PHONE_W + FRAME_T, FRAME_T, PHONE_D + FRAME_T,  0,                       -PHONE_H / 2 - FRAME_T / 2, 0],
-      [FRAME_T, PHONE_H + FRAME_T, PHONE_D + FRAME_T, -PHONE_W / 2 - FRAME_T / 2, 0,                        0],
-      [FRAME_T, PHONE_H + FRAME_T, PHONE_D + FRAME_T,  PHONE_W / 2 + FRAME_T / 2, 0,                        0],
-    ];
-    frameSides.forEach(([w, h, d, x, y, z]) => {
-      const seg = new THREE.Mesh(new THREE.BoxGeometry(w, h, d, 2, 2, 1), frameMat);
-      seg.position.set(x, y, z);
-      phoneGroup.add(seg);
+    const matViolet = new THREE.MeshStandardMaterial({
+      color: 0x7711cc, metalness: 0.85, roughness: 0.10,
+      emissive: 0x9922ee, emissiveIntensity: 0.50,
+      transparent: true, opacity: 0.78,
     });
-
-    // Outer indigo rim lines
-    phoneGroup.add(new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(PHONE_W + 0.04, PHONE_H + 0.04, PHONE_D + 0.04)),
-      new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.9 })
-    ));
-    // Inner seam
-    phoneGroup.add(new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(PHONE_W + 0.001, PHONE_H + 0.001, PHONE_D)),
-      new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.5 })
-    ));
-
-    // Screen bezel — very dark indigo
-    const screenBezel = new THREE.Mesh(
-      new THREE.BoxGeometry(PHONE_W - 0.07, PHONE_H - 0.07, 0.010),
-      new THREE.MeshStandardMaterial({ color: 0x0d0f2e, roughness: 0.9, metalness: 0.0 })
-    );
-    screenBezel.position.z = PHONE_D / 2 + 0.003;
-    phoneGroup.add(screenBezel);
-
-    // Screen — clean white
-    const screenMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      metalness: 0.0,
-      roughness: 0.08,
-      emissive: 0xeef2ff,
-      emissiveIntensity: 0.12,
+    const matCyan = new THREE.MeshStandardMaterial({
+      color: 0x0088bb, metalness: 0.88, roughness: 0.09,
+      emissive: 0x00aadd, emissiveIntensity: 0.48,
+      transparent: true, opacity: 0.75,
     });
-    const screenMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(PHONE_W - 0.18, PHONE_H - 0.18, 0.004),
-      screenMat
-    );
-    screenMesh.position.z = PHONE_D / 2 + 0.008;
-    phoneGroup.add(screenMesh);
+    const wireMat = (col: number) =>
+      new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.55 });
 
-    // ── Screen UI — indigo elements on white screen ────────────────────────
-    const SZ = PHONE_D / 2 + 0.014;
-
-    const ui = (
-      w: number, h: number, x: number, y: number,
-      color: number, ei: number, op = 1.0
-    ) => {
-      const m = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, 0.002),
-        new THREE.MeshStandardMaterial({
-          color, emissive: color, emissiveIntensity: ei,
-          transparent: op < 1, opacity: op, roughness: 0.1, metalness: 0.0,
-        })
-      );
-      m.position.set(x, y, SZ);
-      return m;
-    };
-
-    // Status bar
-    phoneGroup.add(ui(1.60, 0.075,  0,      1.97,  0xf1f3f9, 0.3, 0.7));
-    phoneGroup.add(ui(0.28, 0.035, -0.55,   1.97,  0x1a1c5e, 0.6));
-    phoneGroup.add(ui(0.12, 0.035,  0.60,   1.97,  0x1a1c5e, 0.6));
-
-    // Dynamic Island
-    const diMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.40, 0.10, 0.014),
-      new THREE.MeshStandardMaterial({ color: 0x0d0f2e, metalness: 0.2, roughness: 0.5 })
-    );
-    diMesh.position.set(0, PHONE_H / 2 - 0.17, PHONE_D / 2 + 0.010);
-    phoneGroup.add(diMesh);
-
-    const diLed = new THREE.Mesh(
-      new THREE.BoxGeometry(0.040, 0.040, 0.003),
-      new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 3.0 })
-    );
-    diLed.position.set(0.13, PHONE_H / 2 - 0.17, PHONE_D / 2 + 0.012);
-    phoneGroup.add(diLed);
-
-    // ── VS Logomark — indigo circle + logo ────────────────────────────────
-    const logoCircle = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.38, 0.38, 0.003, 48),
-      new THREE.MeshStandardMaterial({
-        color: 0x1a1c5e, metalness: 0.1, roughness: 0.3,
-        emissive: 0x2d30a0, emissiveIntensity: 0.5,
-      })
-    );
-    logoCircle.rotation.x = Math.PI / 2;
-    logoCircle.position.set(0, 0.55, SZ + 0.001);
-    phoneGroup.add(logoCircle);
-
-    // Indigo ring
-    const logoRing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.40, 0.40, 0.002, 48, 1, true),
-      new THREE.MeshStandardMaterial({
-        color: 0x818cf8, emissive: 0x818cf8, emissiveIntensity: 1.2,
-        side: THREE.BackSide, transparent: true, opacity: 0.9,
-      })
-    );
-    logoRing.rotation.x = Math.PI / 2;
-    logoRing.position.set(0, 0.55, SZ + 0.001);
-    phoneGroup.add(logoRing);
-
-    // V shape — white on indigo circle
-    const vMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xc7d2fe, emissiveIntensity: 0.4 });
-    const vLeft = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.38, 0.004), vMat);
-    vLeft.rotation.z =  0.42;
-    vLeft.position.set(-0.14, 0.52, SZ + 0.003);
-    phoneGroup.add(vLeft);
-
-    const vRight = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.38, 0.004), vMat);
-    vRight.rotation.z = -0.42;
-    vRight.position.set(0.14, 0.52, SZ + 0.003);
-    phoneGroup.add(vRight);
-
-    // S letterform — indigo on white
-    phoneGroup.add(ui(0.22, 0.040,  0.085,  0.70,  0x6366f1, 1.4));
-    phoneGroup.add(ui(0.22, 0.040,  0.065,  0.56,  0x6366f1, 1.4));
-    phoneGroup.add(ui(0.22, 0.040,  0.085,  0.42,  0x6366f1, 1.4));
-    phoneGroup.add(ui(0.040, 0.14,  0.185,  0.63,  0x6366f1, 1.4));
-    phoneGroup.add(ui(0.040, 0.14, -0.055,  0.49,  0x6366f1, 1.4));
-
-    // Brand text bars
-    phoneGroup.add(ui(0.60, 0.045,  0,      0.11,  0x1a1c5e, 0.9));
-    phoneGroup.add(ui(0.32, 0.030,  0,      0.03,  0x6366f1, 0.8));
-
-    // Divider
-    phoneGroup.add(ui(1.25, 0.008,  0,     -0.12,  0xa5b4fc, 0.5, 0.5));
-
-    // Product rows — indigo accent bars
-    const rowColors = [0x10b981, 0x6366f1, 0xf59e0b];
-    [-0.32, -0.65, -0.98].forEach((y, i) => {
-      phoneGroup.add(ui(1.40, 0.200,  0,      y,      0xeef2ff, 0.2, 0.8));
-      phoneGroup.add(ui(0.016, 0.200, -0.68,  y,      rowColors[i], 1.2));
-      phoneGroup.add(ui(0.55, 0.040, -0.25,   y + 0.05, 0x1a1c5e, 0.7));
-      phoneGroup.add(ui(0.28, 0.030, -0.25,   y - 0.05, 0x6366f1, 0.9));
-      phoneGroup.add(ui(0.22, 0.030,  0.42,   y,      rowColors[i], 1.0));
-    });
-
-    // CTA button — indigo
-    phoneGroup.add(ui(1.25, 0.110,  0,     -1.38,  0x4f52e8, 1.4));
-    phoneGroup.add(ui(0.55, 0.038,  0,     -1.38,  0xffffff, 0.8));
-
-    // Home indicator
-    phoneGroup.add(ui(0.35, 0.022,  0,     -1.90,  0x9da6c8, 0.4, 0.6));
-
-    // Camera island (back)
-    const CAM_X = -0.33;
-    const CAM_Y =  1.33;
-    const cameraIsland = new THREE.Mesh(
-      new THREE.BoxGeometry(0.96, 0.96, 0.052),
-      new THREE.MeshStandardMaterial({ color: 0x0d0f2e, metalness: 0.7, roughness: 0.25 })
-    );
-    cameraIsland.position.set(CAM_X, CAM_Y, -(PHONE_D / 2 + 0.022));
-    phoneGroup.add(cameraIsland);
-
-    const islandEdge = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(0.99, 0.99, 0.055)),
-      new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.5 })
-    );
-    islandEdge.position.copy(cameraIsland.position);
-    phoneGroup.add(islandEdge);
-
-    // Lenses
-    const lensMat     = new THREE.MeshStandardMaterial({ color: 0x0d1f3c, metalness: 0.95, roughness: 0.04 });
-    const lensRingMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, metalness: 0.99, roughness: 0.06 });
-    const lensGlowMat = new THREE.MeshStandardMaterial({
-      color: 0xa5b4fc, emissive: 0x818cf8, emissiveIntensity: 0.9,
-      metalness: 0.0, roughness: 0.0, transparent: true, opacity: 0.7,
-    });
-
-    ([ [-0.11, 0.13], [0.13, 0.13], [-0.11, -0.13] ] as [number,number][]).forEach(([lx, ly]) => {
-      const lz = -(PHONE_D / 2 + 0.044);
-      const cx = CAM_X + lx;
-      const cy = CAM_Y + ly;
-
-      const ring = new THREE.Mesh(new THREE.BoxGeometry(0.236, 0.236, 0.015), lensRingMat);
-      ring.position.set(cx, cy, lz - 0.002);
-      phoneGroup.add(ring);
-
-      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.194, 0.194, 0.033), lensMat);
-      lens.position.set(cx, cy, lz);
-      phoneGroup.add(lens);
-
-      const glow = new THREE.Mesh(new THREE.BoxGeometry(0.102, 0.102, 0.006), lensGlowMat);
-      glow.position.set(cx, cy, lz + 0.011);
-      phoneGroup.add(glow);
-    });
-
-    // Flash LED — white/indigo tint
-    const flashLed = new THREE.Mesh(
-      new THREE.BoxGeometry(0.13, 0.13, 0.022),
-      new THREE.MeshStandardMaterial({
-        color: 0xe0e7ff, emissive: 0xc7d2fe, emissiveIntensity: 0.6,
-        metalness: 0.3, roughness: 0.4,
-      })
-    );
-    flashLed.position.set(CAM_X + 0.13, CAM_Y - 0.13, -(PHONE_D / 2 + 0.040));
-    phoneGroup.add(flashLed);
-
-    // Side buttons — indigo
-    const buttonMat = new THREE.MeshStandardMaterial({ color: 0x4f52e8, metalness: 0.97, roughness: 0.15 });
-    const pwrBtn = new THREE.Mesh(new THREE.BoxGeometry(0.033, 0.33, 0.046), buttonMat);
-    pwrBtn.position.set(PHONE_W / 2 + 0.033, 0.41, 0);
-    phoneGroup.add(pwrBtn);
-
-    [0.59, 0.15].forEach((y) => {
-      const v = new THREE.Mesh(new THREE.BoxGeometry(0.033, 0.24, 0.046), buttonMat);
-      v.position.set(-(PHONE_W / 2 + 0.033), y, 0);
-      phoneGroup.add(v);
-    });
-
-    const mute = new THREE.Mesh(new THREE.BoxGeometry(0.033, 0.12, 0.046), buttonMat);
-    mute.position.set(-(PHONE_W / 2 + 0.033), 1.20, 0);
-    phoneGroup.add(mute);
-
-    // Corner glints — violet/indigo
-    const glintMat = new THREE.MeshStandardMaterial({
-      color: 0xa5b4fc, emissive: 0x818cf8, emissiveIntensity: 2.5,
-    });
-    ([[1,1],[1,-1],[-1,1],[-1,-1]] as [number,number][]).forEach(([sx, sy]) => {
-      const g = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.040, 0.025), glintMat);
-      g.position.set(sx * (PHONE_W / 2 + 0.009), sy * (PHONE_H / 2 + 0.009), 0);
-      phoneGroup.add(g);
-    });
-
-    phoneGroup.position.set(2.6, 0.0, 0);
-    scene.add(phoneGroup);
-
-    // ---- Floating crystal accents — indigo/violet -------------------------
-    const crystalMat = new THREE.MeshStandardMaterial({
-      color: 0x6366f1, metalness: 0.7, roughness: 0.1,
-      transparent: true, opacity: 0.35,
-      emissive: 0x4f52e8, emissiveIntensity: 0.3,
-    });
-    const crystalMat2 = new THREE.MeshStandardMaterial({
-      color: 0xa5b4fc, metalness: 0.6, roughness: 0.15,
-      transparent: true, opacity: 0.28,
-      emissive: 0x818cf8, emissiveIntensity: 0.25,
-    });
-
-    interface ShapeEntry {
+    interface Crystal {
       mesh: THREE.Mesh;
       wire: THREE.LineSegments;
       phase: number;
       speed: number;
+      rotAxis: THREE.Vector3;
     }
-    const shapeData: ShapeEntry[] = [];
+    const crystals: Crystal[] = [];
 
     const addShape = (
       geo: THREE.BufferGeometry,
       mat: THREE.MeshStandardMaterial,
-      pos: [number, number, number]
+      wireCol: number,
+      pos: [number, number, number],
+      initRot: [number, number, number] = [0, 0, 0],
     ) => {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(...pos);
+      mesh.rotation.set(...initRot);
       scene.add(mesh);
-      const wire = new THREE.LineSegments(
-        new THREE.WireframeGeometry(geo),
-        new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.3 })
-      );
+      const wire = new THREE.LineSegments(new THREE.WireframeGeometry(geo), wireMat(wireCol));
       wire.position.copy(mesh.position);
+      wire.rotation.copy(mesh.rotation);
       scene.add(wire);
-      shapeData.push({ mesh, wire, phase: Math.random() * Math.PI * 2, speed: 0.3 + Math.random() * 0.5 });
+      const axis = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      crystals.push({ mesh, wire, phase: Math.random() * Math.PI * 2, speed: 0.18 + Math.random() * 0.32, rotAxis: axis });
     };
 
-    addShape(new THREE.OctahedronGeometry(0.46),   crystalMat,  [-3.5,  2.2,  1.0]);
-    addShape(new THREE.OctahedronGeometry(0.2875),  crystalMat2, [ 5.5,  1.8, -1.5]);
-    addShape(new THREE.TetrahedronGeometry(0.4025), crystalMat,  [-4.2, -1.5,  0.5]);
-    addShape(new THREE.IcosahedronGeometry(0.345),  crystalMat2, [ 5.0, -1.2,  1.5]);
-    addShape(new THREE.OctahedronGeometry(0.207),   crystalMat,  [ 1.0,  3.0, -1.2]);
-    addShape(new THREE.TetrahedronGeometry(0.253),  crystalMat2, [ 3.5,  2.8,  0.5]);
+    // Large anchors
+    addShape(new THREE.OctahedronGeometry(0.82),  matIndigo, 0x5566ff, [-5.2,  2.4,  0.5], [0.3, 0.5, 0.1]);
+    addShape(new THREE.IcosahedronGeometry(0.68),  matViolet, 0xaa44ff, [ 6.0,  1.8, -1.0], [0.2, 0.8, 0.4]);
+    addShape(new THREE.OctahedronGeometry(0.70),  matCyan,   0x22ccff, [-5.5, -2.2,  0.4], [0.6, 0.2, 0.7]);
+    // Mid-size
+    addShape(new THREE.TetrahedronGeometry(0.52), matViolet, 0xbb55ff, [ 5.5, -2.0,  1.0], [0.4, 1.1, 0.2]);
+    addShape(new THREE.IcosahedronGeometry(0.46), matIndigo, 0x4455ff, [ 0.2,  3.6, -0.6], [0.9, 0.3, 0.5]);
+    addShape(new THREE.OctahedronGeometry(0.42),  matCyan,   0x33ddff, [ 4.0,  3.2,  0.3], [0.1, 0.7, 0.9]);
+    // Small details
+    addShape(new THREE.TetrahedronGeometry(0.30), matIndigo, 0x6677ff, [-3.2, -3.2,  0.1], [0.5, 0.4, 0.2]);
+    addShape(new THREE.IcosahedronGeometry(0.26), matViolet, 0xcc66ff, [ 6.8, -0.8,  0.8], [0.2, 0.6, 0.8]);
+    addShape(new THREE.OctahedronGeometry(0.24),  matCyan,   0x11bbff, [-1.8,  3.0,  1.2], [0.7, 0.1, 0.5]);
 
-    // ---- Particle field — indigo/periwinkle --------------------------------
+    // ── Phone group — populated by GLTFLoader ─────────────────────────────
+    const phoneGroup = new THREE.Group();
+    phoneGroup.position.set(1.8, 0, 0);
+    scene.add(phoneGroup);
 
+    let phoneLoaded = false;
 
-    // ---- Mouse + resize ----------------------------------------------------
-    let mouseX = 0, mouseY = 0, targetX = 0, targetY = 0;
-    const onMouseMove = (e: MouseEvent) => {
-      mouseX = (e.clientX / window.innerWidth  - 0.5) * 2;
-      mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+    const loader = new GLTFLoader();
+    loader.load(
+      "/phone.glb",
+      (gltf) => {
+        const model = gltf.scene;
+
+        // Measure raw bounding box
+        const box  = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        // Scale to ~4.2 units tall
+        const scale = 4.2 / size.y;
+        model.scale.setScalar(scale);
+
+        // Re-measure and centre at group origin
+        box.setFromObject(model);
+        const centre = new THREE.Vector3();
+        box.getCenter(centre);
+        model.position.sub(centre);
+
+        // Enhance materials for the dark space environment
+        model.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) return;
+          const mats = Array.isArray(child.material)
+            ? child.material
+            : [child.material];
+
+          mats.forEach((mat) => {
+            if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+            const name = (mat.name || "").toLowerCase();
+
+            mat.envMapIntensity = 2.5;
+            mat.needsUpdate = true;
+
+            if (name.includes("display")) {
+              mat.emissive = new THREE.Color(0x1a3a7a);
+              mat.emissiveIntensity = 0.9;
+            }
+            if (name.includes("frame") || name.includes("aluminum")) {
+              mat.metalness = Math.min(mat.metalness + 0.1, 1.0);
+              mat.roughness = Math.max(mat.roughness - 0.1, 0.02);
+            }
+            if (name.includes("glass") || name.includes("tint")) {
+              mat.color = new THREE.Color(0x8899cc);
+            }
+            if (name.includes("lens") || name.includes("camera")) {
+              mat.roughness = 0.02;
+              mat.metalness = 0.1;
+            }
+          });
+        });
+
+        phoneGroup.add(model);
+        phoneLoaded = true;
+      },
+      undefined,
+      (err) => console.error("GLB load error:", err),
+    );
+
+    // ── Drag interaction state ────────────────────────────────────────────
+    let isDragging   = false;
+    let dragStartX   = 0;
+    let dragStartRot = 0;
+    let dragDelta    = 0;
+    let releaseVel   = 0;
+    let autoRotY     = 0;
+
+    let mouseX = 0, mouseY = 0;
+    let camTargetX = 0, camTargetY = 0;
+
+    const getEventX = (e: MouseEvent | TouchEvent): number =>
+      "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      isDragging   = true;
+      dragStartX   = getEventX(e);
+      dragStartRot = phoneGroup.rotation.y;
+      releaseVel   = 0;
+      canvas.style.cursor = "grabbing";
     };
-    window.addEventListener("mousemove", onMouseMove);
 
+    const onPointerMove = (e: MouseEvent | TouchEvent) => {
+      if (!isDragging) {
+        if ("clientX" in e) {
+          mouseX = ((e as MouseEvent).clientX / window.innerWidth  - 0.5) * 2;
+          mouseY = ((e as MouseEvent).clientY / window.innerHeight - 0.5) * 2;
+        }
+        return;
+      }
+      const dx = getEventX(e) - dragStartX;
+      dragDelta = dx * 0.008;
+      phoneGroup.rotation.y = dragStartRot + dragDelta;
+    };
+
+    const onPointerUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      autoRotY   = phoneGroup.rotation.y;
+      releaseVel = dragDelta * 0.06;
+      canvas.style.cursor = "grab";
+    };
+
+    canvas.style.cursor = "grab";
+    canvas.addEventListener("mousedown",  onPointerDown as EventListener);
+    canvas.addEventListener("touchstart", onPointerDown as EventListener, { passive: true });
+    window.addEventListener("mousemove",  onPointerMove as EventListener);
+    window.addEventListener("touchmove",  onPointerMove as EventListener, { passive: true });
+    window.addEventListener("mouseup",    onPointerUp);
+    window.addEventListener("touchend",   onPointerUp);
+
+    // ── Resize ────────────────────────────────────────────────────────────
     const onResize = () => {
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      const isMobile = w < 768;
-      const isTablet = w < 1024 && w >= 768;
-
+      const w = canvas.offsetWidth, h = canvas.offsetHeight;
       camera.aspect = w / h;
-
-      if (isMobile) {
+      if (w < 768) {
         camera.fov = 55;
-        camera.position.set(2.6, 0.5, 11);
-        camera.lookAt(2.6, 0, 0);
-      } else if (isTablet) {
+        camera.position.set(0, 0.4, 13.5);
+        phoneGroup.position.set(0, 0, 0);
+      } else if (w < 1024) {
         camera.fov = 50;
-        camera.position.set(3.5, 1.2, 10);
-        camera.lookAt(2.2, 0, 0);
+        camera.position.set(0, 0.2, 12);
+        phoneGroup.position.set(1.2, 0, 0);
       } else {
         camera.fov = 45;
-        camera.position.set(4, 1.5, 9);
-        camera.lookAt(1.8, 0, 0);
+        camera.position.set(0, 0, 11);
+        phoneGroup.position.set(1.8, 0, 0);
       }
-
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", onResize);
     onResize();
 
-    // ---- Animation loop ----------------------------------------------------
-    const TILT_AMP   = 0.30;
-    const TILT_SPEED = 0.35;
-
-    let clock  = 0;
+    // ── Animation loop ────────────────────────────────────────────────────
+    let clock = 0;
     let rafId: number;
 
     const animate = () => {
       rafId = requestAnimationFrame(animate);
       clock += 0.008;
 
-      targetX += (mouseX - targetX) * 0.04;
-      targetY += (mouseY - targetY) * 0.04;
+      starMat.uniforms.uTime.value = clock;
 
-      camera.position.x = 4 + targetX * 0.5;
-      camera.position.y = 1.2 - targetY * 0.35;
-      camera.lookAt(1.8, 0, 0);
+      // Camera parallax from mouse (subtle — moves background, not phone)
+      camTargetX += (mouseX - camTargetX) * 0.025;
+      camTargetY += (mouseY - camTargetY) * 0.025;
+      camera.position.x = camTargetX * 0.8;
+      camera.position.y = -camTargetY * 0.5;
+      camera.lookAt(phoneGroup.position);
 
-      phoneGroup.rotation.y = Math.sin(clock * TILT_SPEED) * TILT_AMP + targetX * 0.08;
-      phoneGroup.position.y = Math.sin(clock * 0.7) * 0.14;
-      phoneGroup.rotation.x = Math.sin(clock * 0.55) * 0.025 - targetY * 0.03;
+      // Phone rotation
+      if (!isDragging) {
+        if (Math.abs(releaseVel) > 0.0001) {
+          autoRotY  += releaseVel;
+          releaseVel *= 0.92;       // friction decay
+        } else {
+          autoRotY += 0.006;        // steady auto-rotate
+        }
+        phoneGroup.rotation.y = autoRotY;
+      }
+      // Vertical float + subtle tilt (always active)
+      phoneGroup.position.y = Math.sin(clock * 0.55) * 0.15;
+      phoneGroup.rotation.x = Math.sin(clock * 0.40) * 0.035;
 
-      shapeData.forEach((s, i) => {
-        const t = clock * s.speed + s.phase;
-        s.mesh.position.y += Math.sin(t) * 0.003;
-        s.wire.position.y  = s.mesh.position.y;
-        s.mesh.rotation.x += 0.004 + i * 0.0008;
-        s.mesh.rotation.y += 0.006 + i * 0.001;
-        s.wire.rotation.copy(s.mesh.rotation);
+      // Screen glow pulse
+      screenLight.intensity = 9 + Math.sin(clock * 1.4) * 1.5;
+
+      // Stars slow drift
+      stars.rotation.y = clock * 0.005;
+
+      // Geometric accents
+      crystals.forEach((c) => {
+        const t = clock * c.speed + c.phase;
+        c.mesh.position.y += Math.sin(t) * 0.0016;
+        c.wire.position.y  = c.mesh.position.y;
+        c.mesh.rotateOnAxis(c.rotAxis, 0.004);
+        c.wire.rotation.copy(c.mesh.rotation);
       });
-
-      // Pulse indigo fill
-      indigoFill.intensity = 10 + Math.sin(clock * 1.6) * 3;
-
-
-
-      screenBounce.intensity = 4.0 + Math.sin(clock * 1.4) * 0.8;
 
       renderer.render(scene, camera);
     };
 
     animate();
 
+    // ── Cleanup ───────────────────────────────────────────────────────────
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("resize",    onResize);
+      canvas.removeEventListener("mousedown",  onPointerDown as EventListener);
+      canvas.removeEventListener("touchstart", onPointerDown as EventListener);
+      window.removeEventListener("mousemove",  onPointerMove as EventListener);
+      window.removeEventListener("touchmove",  onPointerMove as EventListener);
+      window.removeEventListener("mouseup",    onPointerUp);
+      window.removeEventListener("touchend",   onPointerUp);
+      window.removeEventListener("resize",     onResize);
       renderer.dispose();
+      starGeo.dispose();
+      bgGeo.dispose();
+      bgMat.dispose();
+      starMat.dispose();
     };
   }, []);
 

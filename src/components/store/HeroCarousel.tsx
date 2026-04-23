@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 const HeroScene3D = dynamic(() => import("./HeroScene3D"), {
   ssr: false,
   loading: () => (
-    <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 60% at 65% 50%, #0d1f5e 0%, #020408 70%)" }} />
+    <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 60% at 65% 50%, #1a2a6e 0%, #03061a 70%)" }} />
   ),
 });
 
@@ -47,17 +47,17 @@ export default function HeroSection() {
         {mounted && <HeroScene3D />}
       </div>
 
-      {/* Vignette overlay — darkens edges for text contrast */}
+      {/* Vignette overlay */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 75% 80% at 75% 50%, transparent 30%, rgba(2,4,8,0.55) 100%)",
+          background: "radial-gradient(ellipse 75% 80% at 75% 50%, transparent 30%, rgba(3,6,26,0.60) 100%)",
         }}
       />
       {/* Left fade for text area */}
       <div
         className="absolute inset-y-0 left-0 w-1/2 pointer-events-none"
-        style={{ background: "linear-gradient(to right, rgba(2,4,8,0.70) 0%, transparent 100%)" }}
+        style={{ background: "linear-gradient(to right, rgba(3,6,26,0.75) 0%, transparent 100%)" }}
       />
 
       {/* Text content */}
@@ -160,7 +160,7 @@ export default function HeroSection() {
       {/* Bottom fade to white */}
       <div
         className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none"
-        style={{ background: "linear-gradient(to bottom, transparent, rgba(2,4,8,0.7))" }}
+        style={{ background: "linear-gradient(to bottom, transparent, rgba(3,6,26,0.75))" }}
       />
 
       {/* Scroll indicator */}

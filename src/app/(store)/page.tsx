@@ -13,7 +13,7 @@ import type { Product } from "@/lib/types";
 const HeroCarousel = dynamic(() => import("@/components/store/HeroCarousel"), {
   ssr: false,
   loading: () => (
-    <div className="w-full" style={{ height: "100svh", minHeight: "640px", background: "#020408" }} />
+    <div className="w-full" style={{ height: "100svh", minHeight: "640px", background: "#03061a" }} />
   ),
 });
 
